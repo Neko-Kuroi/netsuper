@@ -1,6 +1,10 @@
 import * as cheerio from 'cheerio';
 import fakeUserAgent from 'fake-useragent';
+import axios from 'axios';
 import type { StoreDetails } from './types';
+
+export const STORE_LIST_GIST_URL =
+    'https://gist.githubusercontent.com/Neko-Kuroi/6e29343a791f5b6006d93143c8eef90b/raw/34c6ea4a52feb11cc5231b5a2bbd500a5f3b52ed/aeon_netsuper_urls_list2.txt';
 
 // --- Regex patterns ---
 export const URL_PATTERN = /^https:\/\/shop\.aeon\.com\/netsuper\/\d{14,15}$/;
@@ -9,9 +13,6 @@ export const SALES_MANAGER_PATTERN = /販売責任者：(.*)/;
 export const LIQUOR_MANAGER_PATTERN = /酒類販売管理者：(.*)/;
 export const PRICE_CLEAN_PATTERN = /[¥￥,円]/g;
 
-/**
- * ランダムなUser-Agent文字列を生成する（問題のあるブラウザは除外）。
- */
 export function generateUserAgent(): string {
     let useragent: string = fakeUserAgent();
     if (/Firefox|iPhone|Android 10/.test(useragent)) {
@@ -20,25 +21,16 @@ export function generateUserAgent(): string {
     return useragent;
 }
 
-/**
- * URLがAEON NetSuper店舗パターンに一致するか検証する。
- */
 export function validateUrl(url: string): string | null {
     return URL_PATTERN.test(url) ? url : null;
 }
 
-/**
- * ページタイトルから店舗名を抽出する。
- */
 export function parseStoreNameFromTitle(title: string): string {
     if (!title) return "店舗名不明";
     const parts = title.split("　");
     return parts.length > 1 ? parts[1].trim() : parts[0].trim();
 }
 
-/**
- * 正規表現パターンで安全にテキストを抽出する。
- */
 export function safeRegexSearch(pattern: RegExp, text: string, groupIndex: number = 0, splitChar: string | null = null): string {
     const match = text.match(pattern);
     if (!match) return "不明";
@@ -54,9 +46,6 @@ export function safeRegexSearch(pattern: RegExp, text: string, groupIndex: numbe
     }
 }
 
-/**
- * 静的HTMLから店舗詳細（住所・責任者）をCheerioでパースする。
- */
 export function parseStoreDetailsFromHtml(htmlContent: string): StoreDetails {
     const $ = cheerio.load(htmlContent);
     const storeWidget = $('.widget__content--store, .widget__content:contains("イオン"), .widget__content:contains("マックス")').first();
@@ -80,10 +69,16 @@ export function parseStoreDetailsFromHtml(htmlContent: string): StoreDetails {
     return details;
 }
 
-/**
- * 価格文字列から通貨記号・カンマを除去する。
- */
 export function cleanPrice(priceStr: string | null): string {
     if (!priceStr) return "N/A";
     return priceStr.replace(PRICE_CLEAN_PATTERN, "").trim();
+}
+
+export async function fetchAllStoreUrls(): Promise<string[]> {
+    const { data } = await axios.get(STORE_LIST_GIST_URL);
+    const rawUrls = String(data).split('\n').map((l: string) => l.trim()).filter(Boolean);
+    const validUrls = rawUrls.map(validateUrl).filter((u): u is string => u !== null);
+    const uniqueUrls = Array.from(new Set(validUrls));
+    uniqueUrls.sort();
+    return uniqueUrls;
 }

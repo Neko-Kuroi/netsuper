@@ -1,7 +1,6 @@
 import { chromium } from 'playwright';
-import axios from 'axios';
 import { defineEventHandler, getQuery, setResponseHeaders, createError } from 'h3';
-import { validateUrl, generateUserAgent } from '../utils/scraperCore';
+import { validateUrl, generateUserAgent, fetchAllStoreUrls } from '../utils/scraperCore';
 import { processStoreUrl } from '../utils/browserTasks';
 import { setupDatabase } from '../utils/db';
 import { Semaphore } from '../utils/semaphore';
@@ -9,8 +8,6 @@ import type { StoreResultEvent } from '../utils/types';
 
 const DB_NAME = 'rice_scraper.db';
 const MAX_CONCURRENT_TASKS = 3;
-const STORE_LIST_GIST_URL =
-    'https://gist.githubusercontent.com/Neko-Kuroi/6e29343a791f5b6006d93143c8eef90b/raw/34c6ea4a52feb11cc5231b5a2bbd500a5f3b52ed/aeon_netsuper_urls_list2.txt';
 
 export default defineEventHandler(async (event) => {
     const query = getQuery(event);
@@ -45,8 +42,7 @@ export default defineEventHandler(async (event) => {
         }
     } else {
         try {
-            const { data } = await axios.get(STORE_LIST_GIST_URL);
-            rawUrls = String(data).split('\n').map((l: string) => l.trim()).filter(Boolean);
+            rawUrls = await fetchAllStoreUrls();
         } catch (e: any) {
             send('fatal_error', { message: `店舗リストの取得に失敗しました: ${e.message}` });
             res.end();
@@ -54,6 +50,8 @@ export default defineEventHandler(async (event) => {
         }
     }
 
+    // customモードのURLはfetchAllStoreUrls内で未検証のため、ここで改めて検証・ソートする
+    // （allモードはfetchAllStoreUrlsが既に検証・ソート済みだが、二重適用しても結果は変わらない）
     const validUrls = rawUrls.map(validateUrl).filter((u): u is string => u !== null);
     validUrls.sort();
 
