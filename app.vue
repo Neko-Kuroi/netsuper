@@ -39,6 +39,20 @@ const storeList = ref<string[]>([])
 const selectedStores = ref<Set<string>>(new Set())
 const isLoadingStores = ref(false)
 const storeListError = ref('')
+const storeFilter = ref('')
+
+// URLから店舗ID部分だけを抜き出して表示用に使う
+// 例: https://shop.aeon.com/netsuper/01050000003240 → 01050000003240
+function extractStoreId(url: string): string {
+    const match = url.match(/\/netsuper\/(\d+)\/?$/)
+    return match ? match[1] : url
+}
+
+const filteredStoreList = computed(() => {
+    const q = storeFilter.value.trim().toLowerCase()
+    if (!q) return storeList.value
+    return storeList.value.filter(url => url.toLowerCase().includes(q))
+})
 
 async function loadStoreList() {
     if (storeList.value.length > 0 || isLoadingStores.value) return
@@ -188,16 +202,50 @@ onBeforeUnmount(() => stopSearch())
                         <button type="button" class="secondary" @click="selectAllStores" :disabled="isRunning">全選択</button>
                         <button type="button" class="secondary" @click="clearStoreSelection" :disabled="isRunning">全解除</button>
                     </div>
-                    <div class="store-checklist">
-                        <label v-for="url in storeList" :key="url" class="store-checkbox">
-                            <input
-                                type="checkbox"
-                                :checked="selectedStores.has(url)"
-                                :disabled="isRunning"
-                                @change="toggleStore(url)"
-                            />
-                            {{ url }}
-                        </label>
+
+                    <input
+                        v-model="storeFilter"
+                        type="text"
+                        class="store-filter"
+                        placeholder="店舗ID・URLで絞り込み"
+                        :disabled="isRunning"
+                    />
+
+                    <div class="store-table-wrap">
+                        <table class="store-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-check"></th>
+                                    <th class="col-id">店舗ID</th>
+                                    <th class="col-url">URL</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="url in filteredStoreList"
+                                    :key="url"
+                                    :class="{ selected: selectedStores.has(url) }"
+                                >
+                                    <td class="col-check">
+                                        <input
+                                            type="checkbox"
+                                            :checked="selectedStores.has(url)"
+                                            :disabled="isRunning"
+                                            @change="toggleStore(url)"
+                                        />
+                                    </td>
+                                    <td class="col-id" @click="!isRunning && toggleStore(url)">
+                                        {{ extractStoreId(url) }}
+                                    </td>
+                                    <td class="col-url" :title="url" @click="!isRunning && toggleStore(url)">
+                                        {{ url }}
+                                    </td>
+                                </tr>
+                                <tr v-if="filteredStoreList.length === 0">
+                                    <td colspan="3" class="no-match">該当する店舗がありません</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </template>
             </div>
@@ -269,4 +317,38 @@ th { background: #f5f5f5; }
 .store-log { font-size: 0.85rem; color: #666; }
 .store-log li.error { color: #c00; }
 .store-log li.no_results { color: #999; }
+
+.store-select-header { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
+.store-select-header button { padding: 0.3rem 0.6rem; font-size: 0.85rem; }
+
+.store-filter { width: 100%; box-sizing: border-box; }
+
+.store-table-wrap {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.store-table { width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.85rem; }
+.store-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    z-index: 1;
+}
+.store-table th, .store-table td { border: none; border-bottom: 1px solid #eee; padding: 0.4rem 0.6rem; text-align: left; }
+.store-table tbody tr:hover { background: #f9f9f9; }
+.store-table tbody tr.selected { background: #eef6ff; }
+.store-table .col-check { width: 2.5rem; text-align: center; }
+.store-table .col-id { width: 11rem; font-family: monospace; white-space: nowrap; cursor: pointer; }
+.store-table .col-url {
+    max-width: 0; /* テーブルレイアウトでellipsisを効かせるためのトリック */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #888;
+    cursor: pointer;
+}
+.store-table .no-match { text-align: center; color: #999; padding: 1rem; }
 </style>
