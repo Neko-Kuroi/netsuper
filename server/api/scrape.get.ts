@@ -63,9 +63,24 @@ export default defineEventHandler(async (event) => {
 
     send('init', { total: validUrls.length, keyword });
 
-    const db = await setupDatabase(DB_NAME);
+    let db;
+    let browser;
+    try {
+        db = await setupDatabase(DB_NAME);
+        // headless:trueのみだとroot権限やDocker/Colab等サンドボックス未対応環境で
+        // launch()がエラーも出さずハングすることがあるため、回避フラグを付与。
+        browser = await chromium.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        });
+    } catch (e: any) {
+        console.error(`❌ [Startup Failed] DB初期化またはブラウザ起動に失敗: ${e.message}`);
+        send('fatal_error', { message: `起動処理に失敗しました: ${e.message}` });
+        res.end();
+        return;
+    }
+
     const semaphore = new Semaphore(MAX_CONCURRENT_TASKS);
-    const browser = await chromium.launch({ headless: true });
     const userAgent = generateUserAgent();
 
     let completed = 0;
