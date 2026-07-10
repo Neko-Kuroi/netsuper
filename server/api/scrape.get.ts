@@ -10,7 +10,7 @@ import type { StoreResultEvent } from '../utils/types';
 const DB_NAME = 'rice_scraper.db';
 const MAX_CONCURRENT_TASKS = 3;
 const STORE_LIST_GIST_URL =
-    'https://gist.githubusercontent.com/Neko-Kuroi/6e29343a791f5b6006d93143c8eef90b/raw/34c6ea4a791f5b6006d93143c8eef90b/aeon_netsuper_urls_list2.txt';
+    'https://gist.githubusercontent.com/Neko-Kuroi/6e29343a791f5b6006d93143c8eef90b/raw/34c6ea4a52feb11cc5231b5a2bbd500a5f3b52ed/aeon_netsuper_urls_list2.txt';
 
 export default defineEventHandler(async (event) => {
     const query = getQuery(event);

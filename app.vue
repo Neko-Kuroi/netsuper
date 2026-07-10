@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 
 interface ProductData {
     product_name: string
@@ -26,13 +26,55 @@ interface StoreResultEvent {
 }
 
 const keyword = ref('')
-const mode = ref<'all' | 'custom'>('all')
+const mode = ref<'all' | 'custom' | 'select'>('all')
 const customUrls = ref('')
 const isRunning = ref(false)
 const progress = ref({ completed: 0, total: 0 })
 const results = ref<StoreResultEvent[]>([])
 const errorMessage = ref('')
 let es: EventSource | null = null
+
+// --- 店舗選択モード用 ---
+const storeList = ref<string[]>([])
+const selectedStores = ref<Set<string>>(new Set())
+const isLoadingStores = ref(false)
+const storeListError = ref('')
+
+async function loadStoreList() {
+    if (storeList.value.length > 0 || isLoadingStores.value) return
+    isLoadingStores.value = true
+    storeListError.value = ''
+    try {
+        const data = await $fetch<{ stores: string[]; total: number }>('/api/stores')
+        storeList.value = data.stores
+    } catch (e: any) {
+        storeListError.value = e?.data?.statusMessage || e?.message || '店舗リストの取得に失敗しました'
+    } finally {
+        isLoadingStores.value = false
+    }
+}
+
+function toggleStore(url: string) {
+    if (selectedStores.value.has(url)) {
+        selectedStores.value.delete(url)
+    } else {
+        selectedStores.value.add(url)
+    }
+    // Setはreactivityが効きにくいので新しいインスタンスに差し替えて確実に再描画させる
+    selectedStores.value = new Set(selectedStores.value)
+}
+
+function selectAllStores() {
+    selectedStores.value = new Set(storeList.value)
+}
+
+function clearStoreSelection() {
+    selectedStores.value = new Set()
+}
+
+watch(mode, (m) => {
+    if (m === 'select') loadStoreList()
+})
 
 const allProducts = computed(() =>
     results.value.flatMap(r =>
@@ -49,14 +91,24 @@ function startSearch() {
         errorMessage.value = '店舗URLを1件以上入力してください'
         return
     }
+    if (mode.value === 'select' && selectedStores.value.size === 0) {
+        errorMessage.value = '店舗を1件以上選択してください'
+        return
+    }
 
     errorMessage.value = ''
     results.value = []
     progress.value = { completed: 0, total: 0 }
     isRunning.value = true
 
-    const params = new URLSearchParams({ keyword: keyword.value.trim(), mode: mode.value })
-    if (mode.value === 'custom') params.set('urls', customUrls.value)
+    // 「店舗を選択」モードはgist取得済みのリストから選んだURLをcustomモードとしてAPIに渡す
+    const apiMode = mode.value === 'select' ? 'custom' : mode.value
+    const urlsForApi = mode.value === 'select'
+        ? Array.from(selectedStores.value).join('\n')
+        : customUrls.value
+
+    const params = new URLSearchParams({ keyword: keyword.value.trim(), mode: apiMode })
+    if (apiMode === 'custom') params.set('urls', urlsForApi)
 
     es = new EventSource(`/api/scrape?${params.toString()}`)
 
@@ -112,6 +164,7 @@ onBeforeUnmount(() => stopSearch())
             <div class="mode-select">
                 <label><input type="radio" value="all" v-model="mode" :disabled="isRunning" /> 全店舗を検索</label>
                 <label><input type="radio" value="custom" v-model="mode" :disabled="isRunning" /> 店舗URLを指定</label>
+                <label><input type="radio" value="select" v-model="mode" :disabled="isRunning" /> 店舗を選択</label>
             </div>
 
             <label v-if="mode === 'custom'" class="field">
@@ -122,6 +175,32 @@ onBeforeUnmount(() => stopSearch())
                     :disabled="isRunning"
                 ></textarea>
             </label>
+
+            <div v-if="mode === 'select'" class="field">
+                <p v-if="isLoadingStores">店舗リストを取得中...</p>
+                <p v-else-if="storeListError" class="error">
+                    {{ storeListError }}
+                    <button type="button" class="secondary" @click="loadStoreList">再試行</button>
+                </p>
+                <template v-else>
+                    <div class="store-select-header">
+                        <span>{{ selectedStores.size }} / {{ storeList.length }} 店舗選択中</span>
+                        <button type="button" class="secondary" @click="selectAllStores" :disabled="isRunning">全選択</button>
+                        <button type="button" class="secondary" @click="clearStoreSelection" :disabled="isRunning">全解除</button>
+                    </div>
+                    <div class="store-checklist">
+                        <label v-for="url in storeList" :key="url" class="store-checkbox">
+                            <input
+                                type="checkbox"
+                                :checked="selectedStores.has(url)"
+                                :disabled="isRunning"
+                                @change="toggleStore(url)"
+                            />
+                            {{ url }}
+                        </label>
+                    </div>
+                </template>
+            </div>
 
             <div class="actions">
                 <button @click="startSearch" :disabled="isRunning">
