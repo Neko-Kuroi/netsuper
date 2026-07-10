@@ -42,6 +42,8 @@ export async function searchOnPage(page: Page, searchTerm: string): Promise<bool
             return box;
         }, RETRY_OPTIONS);
 
+        console.log(`✅ [Search] #search box found on ${page.url()}`); 
+
         await searchBox.fill(searchTerm);
 
         await retry(async () => {
