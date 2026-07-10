@@ -2,6 +2,27 @@
 
 AEON NetSuperの店舗商品を、手動入力したキーワードで検索してデータ化するNuxt 3アプリ。
 
+```
+rice-scraper-nuxt/
+├── package.json
+├── nuxt.config.ts
+├── tsconfig.json
+├── rice_scraper.db          # SQLite実行時に自動生成される
+│
+├── app.vue                  # フロントUI（このままルート直下でOK）
+│
+└── server/
+    ├── api/
+    │   └── scrape.get.ts    # GET /api/scrape （SSEオーケストレーション）
+    │
+    └── utils/
+        ├── scraperCore.ts   # 純粋関数（URL検証・パース系）
+        ├── browserTasks.ts  # ← browser.Tasks.ts からリネーム
+        ├── db.ts            # SQLite操作
+        ├── semaphore.ts     # 並列実行制御
+        └── types.ts         # 型定義
+```
+        
 ## セットアップ
 
 ```bash
