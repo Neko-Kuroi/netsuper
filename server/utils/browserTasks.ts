@@ -42,19 +42,27 @@ export async function searchOnPage(page: Page, searchTerm: string): Promise<bool
             return box;
         }, RETRY_OPTIONS);
 
-        console.log(`✅ [Search] #search box found on ${page.url()}`); 
+        console.log(`✅ [Search] #search box found on ${page.url()}`);
 
         await searchBox.fill(searchTerm);
 
+        // クリック自体はリトライして確実に行う。
+        // 注意: ここでは waitForNavigation(networkidle) を使わない。
+        // SPA遷移（History API経由のルーティング）ではnavigatedイベントが
+        // 発火しない、または常時通信の存在でnetworkidleに到達せず
+        // 60秒×3回ブロックし続ける不具合の主因だったため撤廃した。
+        // 実際に検索結果が出たかどうかの判定は、後段の
+        // getProductElements() 側の waitForSelector('.product-item') に委ねる。
         await retry(async () => {
-            const nav = page.waitForNavigation({ timeout: 60000, waitUntil: 'networkidle' });
-            await page.click('#cx-search-button');
-            await nav;
+            const button = await page.$('#cx-search-button');
+            if (!button) throw new Error("Search button not found");
+            await button.click();
         }, RETRY_OPTIONS);
 
-        await retry(async () => {
-            await page.waitForSelector('.product-item', { timeout: 60000 });
-        }, RETRY_OPTIONS);
+        // クリック直後の描画開始を軽く待つ（失敗してもここでは止めない）
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {
+            console.warn(`⚠️ [Search] domcontentloaded待機がタイムアウトしましたが処理を継続します: ${page.url()}`);
+        });
 
         return true;
     } catch (e: any) {
