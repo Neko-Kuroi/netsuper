@@ -4,9 +4,9 @@ import { validateUrl, generateUserAgent, fetchAllStoreUrls } from '../utils/scra
 import { processStoreUrl } from '../utils/browserTasks';
 import { setupDatabase } from '../utils/db';
 import { Semaphore } from '../utils/semaphore';
+import { DB_NAME } from '../utils/config';
 import type { StoreResultEvent } from '../utils/types';
 
-const DB_NAME = 'rice_scraper.db';
 const MAX_CONCURRENT_TASKS = 3;
 
 export default defineEventHandler(async (event) => {
