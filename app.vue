@@ -29,6 +29,8 @@ const keyword = ref('')
 const mode = ref<'all' | 'custom' | 'select'>('all')
 const customUrls = ref('')
 const isRunning = ref(false)
+const hasFinished = ref(false)
+const autoDownload = ref(false)
 const progress = ref({ completed: 0, total: 0 })
 const results = ref<StoreResultEvent[]>([])
 const errorMessage = ref('')
@@ -114,6 +116,7 @@ function startSearch() {
     results.value = []
     progress.value = { completed: 0, total: 0 }
     isRunning.value = true
+    hasFinished.value = false
 
     // 「店舗を選択」モードはgist取得済みのリストから選んだURLをcustomモードとしてAPIに渡す
     const apiMode = mode.value === 'select' ? 'custom' : mode.value
@@ -145,7 +148,11 @@ function startSearch() {
     })
 
     es.addEventListener('done', () => {
+        hasFinished.value = true
         stopSearch()
+        if (autoDownload.value) {
+            downloadDb()
+        }
     })
 
     es.onerror = () => {
@@ -160,6 +167,29 @@ function stopSearch() {
     isRunning.value = false
     es?.close()
     es = null
+}
+
+async function downloadDb() {
+    errorMessage.value = ''
+    try {
+        const res = await fetch('/api/download-db')
+        if (!res.ok) {
+            const data = await res.json().catch(() => null)
+            errorMessage.value = data?.statusMessage || 'DBのダウンロードに失敗しました'
+            return
+        }
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'rice_scraper.db'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+    } catch {
+        errorMessage.value = 'DBのダウンロードに失敗しました（通信エラー）'
+    }
 }
 
 onBeforeUnmount(() => stopSearch())
@@ -180,6 +210,11 @@ onBeforeUnmount(() => stopSearch())
                 <label><input type="radio" value="custom" v-model="mode" :disabled="isRunning" /> 店舗URLを指定</label>
                 <label><input type="radio" value="select" v-model="mode" :disabled="isRunning" /> 店舗を選択</label>
             </div>
+
+            <label class="auto-download-toggle">
+                <input type="checkbox" v-model="autoDownload" />
+                検索終了後にDBを自動ダウンロード
+            </label>
 
             <label v-if="mode === 'custom'" class="field">
                 店舗URL（1行に1件）
@@ -265,6 +300,10 @@ onBeforeUnmount(() => stopSearch())
             （ヒット商品 {{ allProducts.length }} 件）
         </p>
 
+        <div v-if="hasFinished" class="download-row">
+            <button type="button" class="secondary" @click="downloadDb">📥 DBをダウンロード</button>
+        </div>
+
         <table v-if="allProducts.length > 0">
             <thead>
                 <tr>
@@ -306,11 +345,13 @@ onBeforeUnmount(() => stopSearch())
 input, textarea, button { padding: 0.5rem; font-size: 1rem; font-family: inherit; }
 textarea { min-height: 100px; resize: vertical; }
 .mode-select { display: flex; gap: 1.5rem; font-size: 0.95rem; }
+.auto-download-toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: #333; cursor: pointer; width: fit-content; }
 .actions { display: flex; gap: 0.5rem; }
 button { cursor: pointer; }
 button.secondary { background: #eee; }
 .error { color: #c00; }
 .progress { color: #333; font-weight: 600; }
+.download-row { margin-bottom: 1rem; }
 table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
 th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; font-size: 0.9rem; }
 th { background: #f5f5f5; }
