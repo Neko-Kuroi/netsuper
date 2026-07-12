@@ -7,7 +7,7 @@ import { Semaphore } from '../utils/semaphore';
 import { DB_NAME } from '../utils/config';
 import type { StoreResultEvent } from '../utils/types';
 
-const MAX_CONCURRENT_TASKS = 3;
+const MAX_CONCURRENT_TASKS = 4;
 
 export default defineEventHandler(async (event) => {
     const query = getQuery(event);
